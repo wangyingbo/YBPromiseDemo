@@ -14,10 +14,19 @@
 
 @implementation ViewController
 
+#pragma mark - override
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
 }
+
+#pragma mark - initUI
+
+#pragma mark - initData
+
+#pragma mark - actions
+
 
 
 @end
