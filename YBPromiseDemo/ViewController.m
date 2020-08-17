@@ -30,22 +30,114 @@
 #pragma mark - initUI
 
 - (void)configButton {
-    CGFloat button_w = 100;
+    CGFloat button_w = 150;
     CGFloat button_h = 50;
     UIButton *button = [[UIButton alloc] initWithFrame:CGRectMake(FULL_SCREEN_W/2 - button_w/2, 100, button_w, button_h)];
     [button setTitle:@"测试" forState:UIControlStateNormal];
+    //[button setTitleColor:[UIColor redColor] forState:UIControlStateNormal];
     [button addTarget:self action:@selector(promiseAction:) forControlEvents:UIControlEventTouchUpInside];
+    button.backgroundColor = [UIColor lightGrayColor];
     [self.view addSubview:button];
     
 }
 
 #pragma mark - initData
 
+- (void)initData {
+    
+}
+
 #pragma mark - actions
 
 /// Promise使用文档：https://github.com/google/promises/blob/master/g3doc/index.md
 /// @param sender sender description
 - (void)promiseAction:(id)sender {
+    
+    //测试then pipeline
+    //[self testThenPipeline];
+    
+    //测试catch pipeline
+    //[self testCatchPipeline];
+    
+    //测试同步 promise all
+    //[self testPromiseAll];
+    
+    //测试 promise default queue all
+    //[self testPromiseAsyncMainQueueAll];
+    
+    //测试promise aysnc custom queue all
+    [self testPromiseAsyncCustomQueueAll];
+    
+}
+
+/// 测试then pipeline
+- (void)testThenPipeline {
+    [[[[self work1:@"10"] then:^id(NSString *string) {
+      return [self work2:string];
+    }] then:^id(NSNumber *number) {
+      return [self work3:number];
+    }] then:^id(NSNumber *number) {
+      NSLog(@"then pipeline done:%@", number);  // 100
+      return number;
+    }];
+}
+
+/// 测试catch pipeline
+- (void)testCatchPipeline {
+    [[[[[self work1:@"abc"] then:^id(NSString *string) {
+      return [self work2:string];
+    }] then:^id(NSNumber *number) {
+      return [self work3:number];  // Never executed.
+    }] then:^id(NSNumber *number) {
+      NSLog(@"%@", number);  // Never executed.
+      return number;
+    }] catch:^(NSError *error) {
+      NSLog(@"Cannot convert string to number: %@", error);
+    }];
+}
+
+/// 测试同步promise all
+- (void)testPromiseAll {
+    FBLPromise *do1 = [self do1:[NSURL URLWithString:@"abc"]];
+    FBLPromise *do2 = [self do2:[NSURL URLWithString:@"def"]];
+    [[FBLPromise all:@[do1,do2]] then:^id _Nullable(NSArray * _Nullable value) {
+        NSLog(@"sync promise all done!!!");
+        return nil;
+    }];
+    
+}
+
+/// 测试 promise default queue all
+- (void)testPromiseAsyncMainQueueAll {
+    FBLPromise *async1 = [self async1:[NSURL URLWithString:@"abc"]];
+    FBLPromise *async2 = [self async2:[NSURL URLWithString:@"def"]];
+    NSMutableArray *mutAsyncArray = [NSMutableArray array];
+    [mutAsyncArray addObject:async1];
+    [mutAsyncArray addObject:async2];
+    
+    [[FBLPromise all:mutAsyncArray.copy] then:^id _Nullable(NSArray * _Nullable value) {
+        NSLog(@"async default queue all task done!!!");
+        return nil;
+    }];
+}
+
+/// 测试promise aysnc custom queue all
+- (void)testPromiseAsyncCustomQueueAll {
+    //测试
+    FBLPromise *task1 = [self task1:[NSURL URLWithString:@"abc"]];
+    FBLPromise *task2 = [self task2:[NSURL URLWithString:@"def"]];
+    FBLPromise *task3 = [self task3:[NSURL URLWithString:@"ghi"]];
+    NSMutableArray *mutTaskArray = [NSMutableArray array];
+    [mutTaskArray addObject:task1];
+    [mutTaskArray addObject:task2];
+    [mutTaskArray addObject:task3];
+    
+    dispatch_queue_t queue = dispatch_queue_create("com.all.yb", DISPATCH_QUEUE_SERIAL);
+    [[FBLPromise onQueue:queue all:mutTaskArray.copy] then:^id _Nullable(NSArray * _Nullable value) {
+        NSLog(@"async custom queue all calues: %@",value);
+        NSLog(@"async custom queue all task done!!!");
+        return nil;
+    }];
     
 }
 
@@ -56,6 +148,7 @@
     FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(1000 * 1000);//1000ms
         NSLog(@"task 1");
+        fulfill(@"task 1");
     }];
     return promise;
 }
@@ -68,6 +161,7 @@
     FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2000 * 1000);//2000ms
         NSLog(@"task 2");
+        fulfill(@"task 2");
     }];
     return promise;
     
@@ -81,6 +175,7 @@
     FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(1500 * 1000);//1500ms
         NSLog(@"task 3");
+        fulfill(@"task 3");
     }];
     return promise;
     
@@ -93,6 +188,7 @@
     FBLPromise<NSString *> *promise = [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2000 * 1000);//2000ms
         NSLog(@"async 1");
+        fulfill(@"async 1");
     }];
     return promise;
     
@@ -105,6 +201,7 @@
     FBLPromise<NSString *> *promise = [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2200 * 1000);//2200ms
         NSLog(@"async 2");
+        fulfill(@"async 2");
     }];
     return promise;
     
@@ -118,6 +215,19 @@
         usleep(2000 * 1000);//2000ms
         NSLog(@"do 1");
         return @"do 1";
+    }];
+    return promise;
+    
+}
+
+- (FBLPromise<NSString *> *)do2:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:nil];
+    }
+    FBLPromise<NSString *> *promise = [FBLPromise do:^id _Nullable{
+        usleep(1000 * 1000);//1000ms
+        NSLog(@"do 2");
+        return @"do 2";
     }];
     return promise;
     
@@ -193,18 +303,22 @@
 
 - (FBLPromise<NSString *> *)work1:(NSString *)string {
   return [FBLPromise do:^id {
-    return string;
+      NSLog(@"excute work 1");
+      return string;
   }];
 }
 
 - (FBLPromise<NSNumber *> *)work2:(NSString *)string {
   return [FBLPromise do:^id {
-    return @(string.integerValue);
+      NSLog(@"excute work 2");
+      NSInteger number = string.integerValue;
+      return number > 0 ? @(number) : [NSError errorWithDomain:@"" code:0 userInfo:nil];
   }];
 }
 
 - (NSNumber *)work3:(NSNumber *)number {
-  return @(number.integerValue * number.integerValue);
+    NSLog(@"excute work 3");
+    return @(number.integerValue * number.integerValue);
 }
 
 - (void)all {
@@ -236,6 +350,7 @@
     }];
 }
 
+/// any is similar to all, but it fulfills even if some of the promises in the provided array are rejected. If all promises in the input array are rejected, the returned promise rejects with the same error as the last one that was rejected.
 - (void)any {
     FBLPromise<NSString *>*promise1 = [FBLPromise do:^id _Nullable{
         return @"any test promise 1";
@@ -305,6 +420,7 @@
     
 }
 
+/// recover lets us catch an error and easily recover from it without breaking the rest of the promise chain.
 - (void)recover {
     FBLPromise<NSString *>*promise = [FBLPromise do:^id _Nullable{
         return @"recover test promise 1";
@@ -318,6 +434,7 @@
     }];
 }
 
+/// reduce makes it easy to produce a single value from a collection of promises using a given closure or block. A benefit of using Promise.reduce over the Swift library's reduce(_:_:), is that Promise.reduce resolves the promise with the partial value for you so you don't have to chain on that promise inside the closure in order to get its value. Here's a simple example of how to reduce an array of numbers to a single string:
 - (void)reduce {
     NSArray<NSNumber *> *numbers = @[ @1, @2, @3 ];
     [[[FBLPromise resolvedWith:@"0"] reduce:numbers
@@ -388,7 +505,7 @@
     }];
 }
 
-- (FBLPromise<NSData*> *)Wrap {
+- (FBLPromise<NSData*> *)wrap {
     return [FBLPromise wrapObjectOrErrorCompletion:^(FBLPromiseObjectOrErrorCompletion handler) {
         
     }];
