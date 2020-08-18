@@ -9,6 +9,8 @@
 #import "ViewController.h"
 #import "FBLPromises.h"
 
+
+
 #define FULL_SCREEN_W ([UIScreen mainScreen].bounds.size.width)
 #define FULL_SCREEN_H ([UIScreen mainScreen].bounds.size.height)
 
@@ -66,8 +68,16 @@
     //[self testPromiseAsyncMainQueueAll];
     
     //测试promise aysnc custom queue all
-    [self testPromiseAsyncCustomQueueAll];
+    //[self testPromiseAsyncCustomQueueAll];
     
+    //测试异步管道
+    //[self testAsyncPipeline];
+    
+    //测试异步wait
+    //[self testAsyncAwait];
+    
+    //测试链式语法
+    [self testDotChain];
 }
 
 /// 测试then pipeline
@@ -116,6 +126,7 @@
     [mutAsyncArray addObject:async2];
     
     [[FBLPromise all:mutAsyncArray.copy] then:^id _Nullable(NSArray * _Nullable value) {
+        NSLog(@"async default queue all calues: %@",value);
         NSLog(@"async default queue all task done!!!");
         return nil;
     }];
@@ -141,16 +152,70 @@
     
 }
 
+/// 测试异步管道
+- (void)testAsyncPipeline {
+    
+    [[[[self task1:[NSURL URLWithString:@"abc"]] then:^id _Nullable(NSString * _Nullable value) {
+        NSLog(@"task 1 then result:%@",value);
+        return [self task2:[NSURL URLWithString:@"def"]];
+    }] then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 2 then result:%@",value);
+        return [self task3:[NSURL URLWithString:@"ghi"]];
+    }] then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 3 then result:%@",value);
+        return @"end";
+    }];
+    
+}
+
+/// 测试异步wait
+- (void)testAsyncAwait {
+    NSError *error;
+    NSString *task1 = FBLPromiseAwait([self task1:[NSURL URLWithString:@"abc"]], &error);
+    if (error) {
+    }
+    NSLog(@"task 1 excute result: %@",task1);
+    NSString *task2 = FBLPromiseAwait([self task2:[NSURL URLWithString:@"def"]], &error);
+    if (error) {
+    }
+    NSLog(@"task 2 excute result: %@",task2);
+    NSString *task3 = FBLPromiseAwait([self task3:[NSURL URLWithString:@"ghi"]], &error);
+    if (error) {
+    }
+    NSLog(@"task 3 excute result: %@",task3);
+}
+
+/**
+ 测试链式语法
+ https://github.com/google/promises/blob/master/g3doc/index.md#dot-syntax-in-objective-c
+ */
+- (void)testDotChain {
+    
+    [self work1:@"abc"]
+    .then(^id(NSString *string) {
+      return [self work2:string];
+    })
+    .then(^id(NSNumber *number) {
+      return [self work3:number];
+    })
+    .then(^id(NSNumber *number) {
+      NSLog(@"%@", number);
+      return nil;
+    })
+    .catch(^(NSError *error) {
+      NSLog(@"Cannot convert string to number: %@", error);
+    });
+}
+
 #pragma mark - promise task
 
 - (FBLPromise<NSString *> *)task1:(NSURL *)anURL {
     dispatch_queue_t queue = dispatch_queue_create("com.task1.yb", DISPATCH_QUEUE_CONCURRENT);
-    FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(1000 * 1000);//1000ms
         NSLog(@"task 1");
         fulfill(@"task 1");
     }];
-    return promise;
 }
 
 - (FBLPromise<NSString *> *)task2:(NSURL *)anURL {
@@ -158,12 +223,11 @@
         return [FBLPromise resolvedWith:nil];
     }
     dispatch_queue_t queue = dispatch_queue_create("com.task2.yb", DISPATCH_QUEUE_CONCURRENT);
-    FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2000 * 1000);//2000ms
         NSLog(@"task 2");
         fulfill(@"task 2");
     }];
-    return promise;
     
 }
 
@@ -172,12 +236,11 @@
         return [FBLPromise resolvedWith:nil];
     }
     dispatch_queue_t queue = dispatch_queue_create("com.task3.yb", DISPATCH_QUEUE_CONCURRENT);
-    FBLPromise<NSString *> *promise = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(1500 * 1000);//1500ms
         NSLog(@"task 3");
         fulfill(@"task 3");
     }];
-    return promise;
     
 }
 
@@ -185,12 +248,11 @@
     if (anURL.absoluteString.length == 0) {
         return [FBLPromise resolvedWith:nil];
     }
-    FBLPromise<NSString *> *promise = [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+    return [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2000 * 1000);//2000ms
         NSLog(@"async 1");
         fulfill(@"async 1");
     }];
-    return promise;
     
 }
 
@@ -198,12 +260,11 @@
     if (anURL.absoluteString.length == 0) {
         return [FBLPromise resolvedWith:nil];
     }
-    FBLPromise<NSString *> *promise = [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+    return [FBLPromise async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
         usleep(2200 * 1000);//2200ms
         NSLog(@"async 2");
         fulfill(@"async 2");
     }];
-    return promise;
     
 }
 
@@ -211,12 +272,11 @@
     if (anURL.absoluteString.length == 0) {
         return [FBLPromise resolvedWith:nil];
     }
-    FBLPromise<NSString *> *promise = [FBLPromise do:^id _Nullable{
+    return [FBLPromise do:^id _Nullable{
         usleep(2000 * 1000);//2000ms
         NSLog(@"do 1");
         return @"do 1";
     }];
-    return promise;
     
 }
 
@@ -224,12 +284,11 @@
     if (anURL.absoluteString.length == 0) {
         return [FBLPromise resolvedWith:nil];
     }
-    FBLPromise<NSString *> *promise = [FBLPromise do:^id _Nullable{
+    return [FBLPromise do:^id _Nullable{
         usleep(1000 * 1000);//1000ms
         NSLog(@"do 2");
         return @"do 2";
     }];
-    return promise;
     
 }
 
@@ -514,5 +573,50 @@
 - (void)advancedTopics {
     FBLPromise.defaultDispatchQueue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
 }
+
+/**
+ Nested promises
+ https://github.com/google/promises/blob/master/g3doc/index.md#nested-promises
+ */
+- (void)AntiPatterns {
+    
+}
+
+//- (FBLPromise<NSData *> *)asyncCall {
+//  FBLPromise<NSData *> *promise = [self doSomethingAsync];
+//  [promise then:^id(NSData *result) {
+//    return [self processData:result];
+//  }];
+//  return promise;
+//}
+
+//- (FBLPromise<NSData *> *)asyncCall {
+//  FBLPromise<NSData *> *promise = [self doSomethingAsync];
+//  return [promise then:^id(NSData *result) {
+//    return [self processData:result];
+//  }];
+//}
+
+/**
+ Nested promises
+ https://github.com/google/promises/blob/master/g3doc/index.md#nested-promises
+ */
+- (void)NestedPromises {
+//    [[self loadSomething] then:^id(NSData *something) {
+//      return [[self loadAnother] then:^id(NSData *another) {
+//        return [self doSomethingWith:something andAnother:another];
+//      }];
+//    }];
+    
+//    [[self loadSomething] then:^id(NSData *something) {
+//      return [self loadAnotherWithSomething:something];
+//    }];
+}
+
+//- (FBLPromise<MyResult *> *)loadAnotherWithSomething:(NSData *)something {
+//  return [[self loadAnother] then:^id(NSData *another) {
+//    return [self doSomethingWith:something andAnother:another];
+//  }];
+//}
 
 @end
