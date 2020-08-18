@@ -68,7 +68,7 @@
     //[self testPromiseAsyncMainQueueAll];
     
     //测试promise aysnc custom queue all
-    //[self testPromiseAsyncCustomQueueAll];
+    [self testPromiseAsyncCustomQueueAll];
     
     //测试异步管道
     //[self testAsyncPipeline];
@@ -77,7 +77,7 @@
     //[self testAsyncAwait];
     
     //测试链式语法
-    [self testDotChain];
+    //[self testDotChain];
 }
 
 /// 测试then pipeline
