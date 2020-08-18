@@ -187,6 +187,7 @@
 
 /**
  测试链式语法
+ Dot-syntax in Objective-C
  https://github.com/google/promises/blob/master/g3doc/index.md#dot-syntax-in-objective-c
  */
 - (void)testDotChain {
@@ -575,10 +576,10 @@
 }
 
 /**
- Nested promises
- https://github.com/google/promises/blob/master/g3doc/index.md#nested-promises
+ Anti-patterns
+ https://github.com/google/promises/blob/master/g3doc/index.md#anti-patterns
  */
-- (void)AntiPatterns {
+- (void)antiPatterns {
     
 }
 
@@ -601,7 +602,7 @@
  Nested promises
  https://github.com/google/promises/blob/master/g3doc/index.md#nested-promises
  */
-- (void)NestedPromises {
+- (void)nestedPromises {
 //    [[self loadSomething] then:^id(NSData *something) {
 //      return [[self loadAnother] then:^id(NSData *another) {
 //        return [self doSomethingWith:something andAnother:another];
