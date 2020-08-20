@@ -29,6 +29,10 @@
     [self configButton];
 }
 
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    //NSLog(@"点击了屏幕!!!");
+}
+
 #pragma mark - initUI
 
 - (void)configButton {
@@ -68,7 +72,7 @@
     //[self testPromiseAsyncMainQueueAll];
     
     //测试promise aysnc custom queue all
-    [self testPromiseAsyncCustomQueueAll];
+    //[self testPromiseAsyncCustomQueueAll];
     
     //测试异步管道
     //[self testAsyncPipeline];
@@ -78,6 +82,18 @@
     
     //测试链式语法
     //[self testDotChain];
+    
+    //测试主线程弹窗是否会阻断promise
+    //[self testPromiseAlertActionAll];
+    
+    //测试主线程弹窗是否会阻断promiseAwait（死锁）
+    //[self testPromiseAlertActionAwaitDeadlock];
+    
+    //测试主线程promise弹窗链
+    //[self testPromiseAlertActionAwaitChain];
+    
+    //测试主线程promise弹窗链多个方法调用
+    [self testPromiseAlertActionSerial];
 }
 
 /// 测试then pipeline
@@ -208,6 +224,150 @@
     });
 }
 
+/// 测试主线程弹窗是否会阻断promise
+- (void)testPromiseAlertActionAll {
+    FBLPromise *alertAsync1 = [self asyncPromiseAlert1:[NSURL URLWithString:@"abc"]];
+    FBLPromise *alertAsync2 = [self asyncPromiseAlert2:[NSURL URLWithString:@"def"]];
+    NSMutableArray *mutAlertArray = [NSMutableArray array];
+    [mutAlertArray addObject:alertAsync1];
+    [mutAlertArray addObject:alertAsync2];
+    
+    //dispatch_queue_t queue = dispatch_queue_create("com.all.yb", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t mainQueue = dispatch_get_main_queue();
+    [[FBLPromise onQueue:mainQueue all:mutAlertArray.copy] then:^id _Nullable(NSArray * _Nullable value) {
+        NSLog(@"async promise alert all calues: %@",value);
+        NSLog(@"async promise alert all task done!!!");
+        return nil;
+    }];
+}
+
+/// 测试主线程弹窗是否会阻断promiseAwait-死锁（warnging: 此种写法主队列互相等待了，造成死锁）
+- (void)testPromiseAlertActionAwaitDeadlock {
+#warning 死锁
+    NSError *error;
+    
+    FBLPromise *alertAsync1 = [self asyncPromiseAlert1:[NSURL URLWithString:@"abc"]];
+    NSString *task1 = FBLPromiseAwait(alertAsync1, &error);
+    if (error) {
+        NSLog(@"alert async task 1 error:%@",error);
+        return;
+    }
+    NSLog(@"alert async task 1 excute result: %@",task1);
+    
+    FBLPromise *alertAsync2 = [self asyncPromiseAlert2:[NSURL URLWithString:@"def"]];
+    NSString *task2 = FBLPromiseAwait(alertAsync2, &error);
+    if (error) {
+        NSLog(@"alert async task 2 error:%@",error);
+        return;
+    }
+    NSLog(@"alert async task 2 excute result: %@",task2);
+    
+    FBLPromise *alertAsync3 = [self asyncPromiseAlert3:[NSURL URLWithString:@"ghi"]];
+    NSString *task3 = FBLPromiseAwait(alertAsync3, &error);
+    if (error) {
+        NSLog(@"alert async task 3 error:%@",error);
+        return;
+    }
+    NSLog(@"alert async task 3 excute result: %@",task3);
+    
+}
+
+/// 测试主线程promise弹窗链
+- (void)testPromiseAlertActionAwaitChain {
+    NSError *error;
+
+#warning 注释部分写法仍然导致死锁
+//    FBLPromise *alertAsync1 = [self asyncPromiseAlertAwait1:[NSURL URLWithString:@"abc"]];
+//    NSString *task1 = FBLPromiseAwait(alertAsync1, &error);
+//    if (error) {
+//        NSLog(@"alert async await task 1 error:%@",error);
+//        return;
+//    }
+//    NSLog(@"alert async await task 1 excute result: %@",task1);
+    
+//    FBLPromise *alertAsync2 = [self asyncPromiseAlertAwait2:[NSURL URLWithString:@"def"]];
+//    NSString *task2 = FBLPromiseAwait(alertAsync2, &error);
+//    if (error) {
+//        NSLog(@"alert async await task 2 error:%@",error);
+//        return;
+//    }
+//    NSLog(@"alert async await task 2 excute result: %@",task2);
+//
+//    FBLPromise *alertAsync3 = [self asyncPromiseAlertAwait3:[NSURL URLWithString:@"ghi"]];
+//    NSString *task3 = FBLPromiseAwait(alertAsync3, &error);
+//    if (error) {
+//        NSLog(@"alert async await task 3 error:%@",error);
+//        return;
+//    }
+//    NSLog(@"alert async await task 3 excute result: %@",task3);
+    
+    
+    [[[[[self asyncPromiseAlertAwait1:[NSURL URLWithString:@"abc"]] then:^id _Nullable(NSString * _Nullable value) {
+        NSLog(@"task 1 then:%@",value);
+        return [self asyncPromiseAlertAwait2:[NSURL URLWithString:@"def"]];
+    }] then:^id _Nullable(NSString *  _Nullable value) {
+        NSLog(@"task 2 then:%@",value);
+        if ([value isEqualToString:@"stop"]) {
+            NSLog(@"in the task 2, end task");
+            return @"in the task 2, end task";
+        }
+        return [self asyncPromiseAlertAwait3:[NSURL URLWithString:@"ghi"]];
+    }] then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 3 then:%@",value);
+        return @"end task";
+    }] catch:^(NSError * _Nonnull error) {
+        NSLog(@"await chain error:%@",error);
+    }];
+    
+}
+
+/// 测试主线程promise弹窗链多个方法调用
+- (void)testPromiseAlertActionSerial {
+    
+    /**
+     一步一个方法，在方法末尾判断是否调起下一个方法
+     */
+    
+    [self testPromiseAlertActionSerial1];
+}
+
+- (void)testPromiseAlertActionSerial1 {
+    FBLPromise *promise = [self asyncPromiseAlertAwait1:[NSURL URLWithString:@"abc"]];
+    [[promise then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 1 then parameter:%@",value);
+        [self testPromiseAlertActionSerial2];
+        return nil;
+    }] catch:^(NSError * _Nonnull error) {
+        NSLog(@"task 1 error:%@",error);
+    }];
+}
+
+- (void)testPromiseAlertActionSerial2 {
+    FBLPromise *promise = [self asyncPromiseAlertAwait2:[NSURL URLWithString:@"def"]];
+    [[promise then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 2 then parameter:%@",value);
+        if ([value isEqualToString:@"stop"]) {
+            NSLog(@"in the task 2, end task");
+            return @"in the task 2, end task";
+        }
+        [self testPromiseAlertActionSerial3];
+        return nil;
+    }] catch:^(NSError * _Nonnull error) {
+        NSLog(@"task 2 error:%@",error);
+    }];
+}
+
+- (void)testPromiseAlertActionSerial3 {
+    FBLPromise *promise = [self asyncPromiseAlertAwait3:[NSURL URLWithString:@"ghi"]];
+    [[promise then:^id _Nullable(id  _Nullable value) {
+        NSLog(@"task 3 then parameter:%@",value);
+        NSLog(@"all task end!!!");
+        return nil;
+    }] catch:^(NSError * _Nonnull error) {
+        NSLog(@"task 3 error:%@",error);
+    }];
+}
+
 #pragma mark - promise task
 
 - (FBLPromise<NSString *> *)task1:(NSURL *)anURL {
@@ -266,6 +426,158 @@
         NSLog(@"async 2");
         fulfill(@"async 2");
     }];
+    
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlert1:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:nil];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task1.yb", DISPATCH_QUEUE_CONCURRENT);
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(0500 * 1000);//0500ms
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"asyncPromiseAlert 1" message:@"test asyncPromiseAlert 1 message" preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                NSLog(@"async 1");
+                fulfill(absoluteString);
+            }]];
+            [self presentViewController:alert animated:YES completion:nil];
+        });
+        
+    }];
+    
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlert2:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:nil];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task2.yb", DISPATCH_QUEUE_CONCURRENT);
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(2200 * 1000);//2200ms
+        NSLog(@"async 2");
+        fulfill(absoluteString);
+        
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"asyncPromiseAlert 2" message:@"test asyncPromiseAlert 2 message" preferredStyle:UIAlertControllerStyleAlert];
+//            [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+//            }]];
+//            [self presentViewController:alert animated:YES completion:nil];
+//        });
+        
+    }];
+    
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlert3:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:nil];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task3.yb", DISPATCH_QUEUE_CONCURRENT);
+    return [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(3000 * 1000);//3000ms
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"asyncPromiseAlert 3" message:@"test asyncPromiseAlert 3 message" preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                NSLog(@"async 3");
+                fulfill(absoluteString);
+            }]];
+            [self presentViewController:alert animated:YES completion:nil];
+        });
+        
+    }];
+    
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlertAwait1:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:@"task 1 error!!!"];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task1.yb", DISPATCH_QUEUE_CONCURRENT);
+    FBLPromise *task = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(0500 * 1000);//0500ms
+        NSLog(@"async 1");
+        fulfill(absoluteString);
+    }];
+    NSError *error = nil;
+    NSString *string = FBLPromiseAwait(task, &error);
+    FBLPromise *promise = [FBLPromise pendingPromise];
+    if (string && !error) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"asyncPromiseAlert 1" message:@"test asyncPromiseAlert 1 message" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [promise fulfill:absoluteString];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }else {
+        [promise fulfill:@"task 1 error!!!"];
+    }
+    
+    return promise;
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlertAwait2:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:nil];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task2.yb", DISPATCH_QUEUE_CONCURRENT);
+    FBLPromise *task = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(2200 * 1000);//2200ms
+        NSLog(@"async 2");
+        fulfill(absoluteString);
+    }];
+    
+    FBLPromise *promise = [FBLPromise pendingPromise];
+    NSError *error = nil;
+    NSString *string = FBLPromiseAwait(task, &error);
+    if (string && !error) {
+        NSUInteger random = arc4random();
+        if (random % 3 == 0) {
+            [promise fulfill:absoluteString];
+        } else if (random % 3 == 1) {
+            NSError *randomError = [NSError errorWithDomain:NSCocoaErrorDomain code:-1 userInfo:@{@"reason":@"random error reason!!!"}];
+            [promise reject:randomError];
+        } else {
+            [promise fulfill:@"stop"];
+        }
+    }else {
+        [promise fulfill:@"task 2 error!!!"];
+    }
+    return promise;
+}
+
+- (FBLPromise<NSString *> *)asyncPromiseAlertAwait3:(NSURL *)anURL {
+    if (anURL.absoluteString.length == 0) {
+        return [FBLPromise resolvedWith:@"task 3 error!!!"];
+    }
+    NSString *absoluteString = anURL.absoluteString;
+    dispatch_queue_t queue = dispatch_queue_create("com.task3.yb", DISPATCH_QUEUE_CONCURRENT);
+    FBLPromise *task = [FBLPromise onQueue:queue async:^(FBLPromiseFulfillBlock  _Nonnull fulfill, FBLPromiseRejectBlock  _Nonnull reject) {
+        usleep(3000 * 1000);//3000ms
+        NSLog(@"async 3");
+        fulfill(absoluteString);
+    }];
+    
+    FBLPromise *promise = [FBLPromise pendingPromise];
+    NSError *error = nil;
+    NSString *string = FBLPromiseAwait(task, &error);
+    if (string && !error) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"asyncPromiseAlert 3" message:@"test asyncPromiseAlert 3 message" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [promise fulfill:absoluteString];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }else {
+        [promise fulfill:@"task 3 error!!!"];
+    }
+    return promise;
     
 }
 
